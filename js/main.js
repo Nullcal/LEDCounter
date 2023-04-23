@@ -12,11 +12,12 @@ $(function() {
     let zoomRaito = 1;
     let img;
 
-    // ピン打つ系
-    let mouseX = -1;
-    let mouseY = -1;
-
+    
+    // ピン
+    // ピンの座標はcanvas上の座標（canvas左上を0,0として拡大率1のときの座標）で管理
     let pins = [];
+
+
 
     // ルーペ系
     const mgCvs = $("#magnify-canvas");
@@ -29,14 +30,33 @@ $(function() {
 
     initMagnifier();
 
+
+    // 軸変換
+    const x = "left";
+    const y = "top";
+
+    
+
+    /**
+     * キャンバスとページの座標を変換
+     * @param {number} val 変換する座標
+     * @param {string} axis 座標の軸 x or y
+     * @param {boolean} scale 拡大縮小の有無
+     * @returns 変換した座標
+     */
+    function cvsToPage(val, axis, scale) {
+        return val * (zoomRaito / (scale?1:zoomRaito)) + cvs.offset()[axis];
+    }
+    function pageToCvs(val, axis, scale) {
+        return (val - cvs.offset()[axis]) / (zoomRaito / (scale?1:zoomRaito));
+    }
+
     
 
     // ドラッグオーバー時に、背景色を変更する
     dropzone.on("dragover", function(e) {
-
         // デフォルトイベントは滅ぶべき
-        e.preventDefault();  
-        e.stopPropagation();
+        e.preventDefault();
         
         $(this).addClass("dragover");
         return;
@@ -46,8 +66,7 @@ $(function() {
     dropzone.on("dragleave", function(e) {
 
         // デフォルトイベントは滅ぶべき
-        e.preventDefault();  
-        e.stopPropagation();
+        e.preventDefault();
         
         $(this).removeClass("dragover");
         return;
@@ -144,8 +163,8 @@ $(function() {
         })
 
         // ルーペの中身描画
-        const sx = (e.pageX - $("#main-canvas").offset().left - magnifierRadius/mgZoomRatio/2)/zoomRaito;
-        const sy = (e.pageY - $("#main-canvas").offset().top - magnifierRadius/mgZoomRatio/2)/zoomRaito;
+        const sx = pageToCvs(e.pageX,x,true) - (magnifierRadius/mgZoomRatio/2)/zoomRaito;
+        const sy = pageToCvs(e.pageY,y,true) - (magnifierRadius/mgZoomRatio/2)/zoomRaito;
 
         mgCtx.clearRect(0, 0, magnifierRadius, magnifierRadius);
 
@@ -167,23 +186,24 @@ $(function() {
 
 
 
-    // マウス位置を取得
-    cvs.on("mousemove", function(e) {
-        mouseX = e.offsetX / zoomRaito;
-        mouseY = e.offsetY / zoomRaito;
-    })
+    /**
+     * キャンバスをクリックでピンを追加
+     */
+    cvs.on("click", function(e) {
 
-
-
-    // クリックされたら
-    cvs.on("click", function() {
         // 4つまで
-        if (pins.length < 4) {
-            pins.push({
-                x: mouseX,
-                y: mouseY
-            });
-        }
+        if (pins.length > 3) return;
+
+
+        pins.push({
+            x: pageToCvs(e.pageX,x,true),
+            y: pageToCvs(e.pageY,y,true)
+        });
+
+        // ピンをDOMに追加
+        $("#pins-container").append(`<div id='pin-${pins.length-1}' class='pins'></div>`);
+
+        // キャンバスを再描画
         refreshFrame();
     })
 
@@ -194,7 +214,8 @@ $(function() {
 
         // マウスの位置にポインター表示
         ctx.fillStyle = "#00A7FF";
-        ctx.strokeStyle = "#00A7FF";
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 1/zoomRaito * .2;
 
         ctx.clearRect(0, 0, cvs.width(), cvs.height());
 
@@ -204,18 +225,15 @@ $(function() {
         ctx.beginPath();
         
         for (i = 0; i < pins.length; i++) {
-            if (i == 0) {
-                ctx.moveTo(pins[i].x, pins[i].y);
-            } else {
-                ctx.lineTo(pins[i].x, pins[i].y);
-            }
+            ctx.lineTo(pins[i].x, pins[i].y);
+            $(`#pin-${i}`).css({
+                "left": cvsToPage(pins[i].x,x,true),
+                "top": cvsToPage(pins[i].y,y,true) - $("header").height()
+            })
         }
 
         ctx.closePath();
         ctx.stroke();
-
-        // 再描画を要求する
-        //requestAnimationFrame(refreshFrame);
     }
 
 
