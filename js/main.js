@@ -1,39 +1,18 @@
 $(function() {
 
-    // 読み込み系
+    /**
+     * グローバルな変数を定義
+     */
     const dropzone = $("#dropzone");
 
-    // キャンバス要素系
     const cvs = $("#main-canvas");
     const ctx = cvs[0].getContext("2d");
 
-    let enableAutoFit = true;
-
-    let zoomRaito = 1;
+    let scale = 1;
     let img;
 
-    
-    // ピン
-    // ピンの座標はcanvas上の座標（canvas左上を0,0として拡大率1のときの座標）で管理
-    let pins = [];
-
-
-
-    // ルーペ系
-    const mgCvs = $("#magnify-canvas");
-    const mgCtx = mgCvs[0].getContext("2d");
-
-    const rem = parseFloat($("html").css("font-size"));
-    let magnifierRadius = 8 * rem;
-
-    let mgZoomRatio = 2;
-
-    initMagnifier();
-
-
-    // 軸変換
-    const x = "left";
-    const y = "top";
+    let contrast = 8;
+    let threshold = 80;
 
     
 
@@ -45,40 +24,33 @@ $(function() {
      * @returns 変換した座標
      */
     function cvsToPage(val, axis, scale) {
-        return val * (zoomRaito / (scale?1:zoomRaito)) + cvs.offset()[axis];
+        return val * (scale / (scale?1:scale)) + cvs.offset()[axis=="x"?"left":"top"];
     }
     function pageToCvs(val, axis, scale) {
-        return (val - cvs.offset()[axis]) / (zoomRaito / (scale?1:zoomRaito));
+        return (val - cvs.offset()[axis=="x"?"left":"top"]) / (scale / (scale?1:scale));
     }
 
+
     
-
-    // ドラッグオーバー時に、背景色を変更する
+    /**
+     * ドラッグオーバー時に背景色を変更
+     */
     dropzone.on("dragover", function(e) {
-        // デフォルトイベントは滅ぶべき
         e.preventDefault();
-        
         $(this).addClass("dragover");
-        return;
     });
-
-    // ドラッグオーバーが終了したら、背景色を戻す
     dropzone.on("dragleave", function(e) {
-
-        // デフォルトイベントは滅ぶべき
         e.preventDefault();
-        
         $(this).removeClass("dragover");
-        return;
     });
 
 
 
-    // ドロップされた画像を読み込む
+    /**
+     * ドロップされた画像を読み込む
+     */
     dropzone.on("drop", function(e){
-
-        // デフォルトイベントは滅ぶべき
-        e.stopPropagation();
+        // デフォルトイベントを取り消し
         e.preventDefault();
 
         // ドロップされたファイルを取得
@@ -88,195 +60,144 @@ $(function() {
         dropzone.removeClass("dragover");
     });
 
-    // 選択された画像を読み込む
+    /**
+     * 選択された画像を読み込む
+     *  */
     $("#image-loader").on("change", function(e) {
-
-        // 選択されたファイルを取得
         readImageFile(e.target.files[0]);
     });
 
 
 
-    // イベントから渡された画像を表示
+    /**
+     * イベントから渡された画像を表示
+     *  */
     function readImageFile(file) {
-
-        // キャンバスを表示
+        // キャンバスに画面切り替え
         $("#image-loader-container").addClass("hidden");
         $("#editor-container").removeClass("hidden");
 
         // FileReaderを使用して、画像を読み込む
         const reader = new FileReader();
+        reader.readAsDataURL(file);
 
-        reader.onload = function(event) {
-
+        reader.onload = function(e) {
             // 画像を読み込み
             img = new Image();
-            img.src = event.target.result;
+            img.src = e.target.result;
 
             img.onload = function() {
+                // キャンバスをリサイズ
+                cvs.attr("width", img.width);
+                cvs.attr("height", img.height);
 
                 // キャンバスに画像を描画
-                prepareEditor(img);
                 fitCnavasToWindow();
+                refreshFrame();
             }
         }
-
-        reader.readAsDataURL(file);
-    }
-
-
-    // キャンバスに画像を描画
-    function prepareEditor(img) {
-    
-        // キャンバスをリサイズ
-        cvs.attr("width", img.width);
-        cvs.attr("height", img.height);
-
-        // 初回のアニメーションを開始する
-        //requestAnimationFrame(refreshFrame);
-        refreshFrame()
     }
 
 
 
-    // ルーペを初期化
-    function initMagnifier() {
-        $("#magnifier").css({
-            "width": magnifierRadius+"px",
-            "height": magnifierRadius+"px"
-        })
-        $("#magnify-canvas").attr({
-            "width": magnifierRadius,
-            "height": magnifierRadius
-        })
-    }
-
-    // ルーペ再描画
-    $(window).on("mousemove", function(e) {
-
-        if ($("#editor-container").hasClass("hidden")) return;
-
-        // ルーペ移動
-        $("#magnifier").css({
-            "left": e.pageX - $("#editor-container").offset().left,
-            "top": e.pageY - $("#editor-container").offset().top
-        })
-
-        // ルーペの中身描画
-        const sx = pageToCvs(e.pageX,x,true) - (magnifierRadius/mgZoomRatio/2)/zoomRaito;
-        const sy = pageToCvs(e.pageY,y,true) - (magnifierRadius/mgZoomRatio/2)/zoomRaito;
-
-        mgCtx.clearRect(0, 0, magnifierRadius, magnifierRadius);
-
-        mgCtx.drawImage(cvs[0], sx, sy, magnifierRadius/mgZoomRatio/zoomRaito, magnifierRadius/mgZoomRatio/zoomRaito, 0, 0, magnifierRadius, magnifierRadius);
+    /**
+     * ウィンドウリサイズ時にキャンバスを再描画
+     */
+    $(window).resize(function(e) {
+        fitCnavasToWindow();
     })
 
 
 
-    // ルーペの拡大率を変更
-    $("#mgRatio").on("change", function() {
-        mgZoomRatio = $(this).val();
+    /**
+     * コントラストを調整
+     */
+    $("#contrast").on("change", function() {
+        contrast = $(this).val();
+        refreshFrame();
     });
 
-    // ルーペのサイズを変更
-    $("#mgRadius").on("change", function() {
-        magnifierRadius = $(this).val() * rem;
-        initMagnifier();
+    /**
+     * しきい値を調整
+     */
+    $("#threshold").on("change", function() {
+        threshold = $(this).val();
+        refreshFrame();
     });
 
 
 
     /**
-     * キャンバスをクリックでピンを追加
+     * キャンバスを再描画
      */
-    cvs.on("click", function(e) {
-
-        // 4つまで
-        if (pins.length > 3) return;
-
-
-        pins.push({
-            x: pageToCvs(e.pageX,x,true),
-            y: pageToCvs(e.pageY,y,true)
-        });
-
-        // ピンをDOMに追加
-        $("#pins-container").append(`<div id='pin-${pins.length-1}' class='pins'></div>`);
-
-        // キャンバスを再描画
-        refreshFrame();
-    })
-
-
-
-    // さいびょうがー
-    function refreshFrame(e) {
-
-        // マウスの位置にポインター表示
-        ctx.fillStyle = "#00A7FF";
-        ctx.strokeStyle = "#fff";
-        ctx.lineWidth = 1/zoomRaito * .2;
-
+    function refreshFrame() {
+        // 画像を描画
         ctx.clearRect(0, 0, cvs.width(), cvs.height());
-
         ctx.drawImage(img, 0, 0, img.width, img.height);
 
-        // ピンに沿ってパスを描画
-        ctx.beginPath();
-        
-        for (i = 0; i < pins.length; i++) {
-            ctx.lineTo(pins[i].x, pins[i].y);
-            $(`#pin-${i}`).css({
-                "left": cvsToPage(pins[i].x,x,true),
-                "top": cvsToPage(pins[i].y,y,true) - $("header").height()
-            })
+        // 画像の色データを取得
+        let pxs = ctx.getImageData(0, 0, img.width, img.height);
+
+        // びぶん
+        for (i = 0; i < pxs.data.length/4; i++) {
+            // 色の差を取得
+            const rgb1 = pxs.data.slice(i*4, i*4+3);
+            const rgb2 = pxs.data.slice((i+1)*4, (i+1)*4+3);
+            const rgb3 = pxs.data.slice((i+img.width)*4, (i+img.width)*4+3);
+            
+            const diffX = getRgbDifference(rgb1, rgb2) * contrast;
+            const diffY = getRgbDifference(rgb1, rgb3) * contrast;
+
+            // imageDataを書き換え
+            for (j = 0; j < 3; j++) {
+                //pxs.data[i*4+j] = Math.sqrt(diffX*diffY) < threshold ? 0 : 255;
+                pxs.data[i*4+j] += diffX;
+                pxs.data[i*4+j] -= diffY;
+            }
         }
 
-        ctx.closePath();
-        ctx.stroke();
+        ctx.putImageData(pxs, 0, 0);
+    }
+
+
+    
+    /**
+     * RGB値の差を取得
+     */
+    function getRgbDifference(rgb1, rgb2) {
+        // RGB値をそれぞれ取得
+        const r1 = rgb1[0];
+        const g1 = rgb1[1];
+        const b1 = rgb1[2];
+        const r2 = rgb2[0];
+        const g2 = rgb2[1];
+        const b2 = rgb2[2];
+
+        // RGB値の差を計算
+        const diff = Math.sqrt((Math.pow(r1 - r2, 2) + Math.pow(g1 - g2, 2) + Math.pow(b1 - b2, 2))/3);
+
+        return diff;
     }
 
 
 
-    // キャンバスのCSSサイズを自動調節
+    /**
+     * キャンバスのサイズを自動調節
+     */
     function fitCnavasToWindow() {
-
-        if (!enableAutoFit) return;
-
-        const maxWidth = $("#preview-container").width();
-        const maxHieght = $("#preview-container").height();
+        // キャンバスサイズの最大値を設定
+        const maxWidth = $("#preview-container").width() - 128;
+        const maxHieght = $("#preview-container").height() - 128;
 
         cvs.css({
             "max-width": maxWidth,
             "max-height": maxHieght
         });
 
-        zoomRaito = cvs.width() / cvs.attr("width");
-
-        $("#logger").html("Ratio: "+Math.round(zoomRaito*1000)/1000);
+        // 拡大率を取得
+        scale = cvs.width() / cvs.attr("width");
+        $("#logger").html("Ratio: "+Math.round(scale*1000)/1000);
 
     }
-
-
-
-    // スクロール取得
-    $("#scroll-handler").scroll(function(e) {
-
-        console.log("SCROLLING!");
-        e.stopPropagation();
-
-    });
-
-
-
-    // キャンバスのリサイズ
-    $(window).resize(function(e) {
-
-        fitCnavasToWindow();
-
-        refreshFrame();
-        
-    })
-
 });
   
