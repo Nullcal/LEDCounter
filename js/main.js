@@ -150,9 +150,9 @@ $(function() {
 
             // imageDataを書き換え
             for (j = 0; j < 3; j++) {
-                //pxs.data[i*4+j] = Math.sqrt(diffX*diffY) < threshold ? 0 : 255;
-                pxs.data[i*4+j] += diffX;
-                pxs.data[i*4+j] -= diffY;
+                pxs.data[i*4+j] = Math.sqrt(diffX*diffY) < threshold ? 0 : 255;
+                /*pxs.data[i*4+j] += diffX;
+                pxs.data[i*4+j] -= diffY;*/
             }
         }
 
